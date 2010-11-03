@@ -36,23 +36,30 @@ def rebuildunsup(model,LR,NOISE_LVL,ACTIVATION_REGULARIZATION_COEFF, WEIGHT_REGU
 #    givens = {}
 #    index = T.lscalar()
 #    givens.update({model.x : train[index*batchsize:(index+1)*batchsize]})
-    # TODO: Remove model.x
-    # TODO: Add indices as input param
-    # TODO: Manual updates
     # TODO: Remove params above that are not necessary: batchsize, train, LR
     x = T.dmatrix()
     params = [T.dmatrix(), T.dmatrix(), T.dvector(), T.dvector()]
-    indices = T.lvector()
     # TODO: Remove learning_rate below
     (cost,update) = model.get_cost_updates(x, params[0], params[1], params[2], params[3], corruption_level = NOISE_LVL, learning_rate = LR, l1reg = ACTIVATION_REGULARIZATION_COEFF, l2reg = WEIGHT_REGULARIZATION_COEFF)
-    TRAINFUNC = theano.function([x, indices] + params, [cost] + update)
+    TRAINFUNC = theano.function([x] + params, [cost] + update)
     # TODO: Now do the update
 
 def createlibsvmfile(model,datafiles,dataout):
     print >> sys.stderr, 'Creating libsvm file %s (model=%s, datafiles=%s)...' % (repr(dataout), repr(model),datafiles)
     print >> sys.stderr, stats()
+
+    x = T.dmatrix()
+    params = [T.dmatrix(), T.dmatrix(), T.dvector(), T.dvector()]
+    model.x = x
+    model.W, model.W_prime, model.b, model.b_prime = params
+    model.params = [model.W, model.W_prime, model.b, model.b_prime]
+
     outputs = [model.get_hidden_values(model.x)]
-    func = theano.function([model.x],outputs)
+    func = theano.function([model.x] + params,outputs)
+
+#    print >> sys.stderr, 'REMOVEME: about to read'
+#    print >> sys.stderr, stats()
+
     f = myopen(datafiles[0],'r')
     instances = numpy.asarray(cPickle.load(f),dtype=theano.config.floatX)
     f.close()
@@ -60,9 +67,28 @@ def createlibsvmfile(model,datafiles,dataout):
     labels = numpy.asarray(cPickle.load(f),dtype = 'int64')
     f.close()
     f = myopen(dataout,'w')
+
+#    print >> sys.stderr, 'REMOVEME: about to iterate'
+#    print >> sys.stderr, stats()
+
+#    params = [model.Wvalue, model.W_primevalue, model.bvalue, model.b_primevalue]
     for i in range(globalstate.NB_MAX_TRAINING_EXAMPLES_SVM/globalstate.BATCH_CREATION_LIBSVM):
+#        print >> sys.stderr, 'REMOVEME: about to do %d' % i
+#        print >> sys.stderr, stats()
         textr = ''
-        rep = func(instances[globalstate.BATCH_CREATION_LIBSVM*i:globalstate.BATCH_CREATION_LIBSVM*(i+1),:])[0]
+
+        assert globalstate.BATCH_CREATION_LIBSVM == 1       # Don't want to select indices from more than one example
+        x = instances[globalstate.BATCH_CREATION_LIBSVM*i:globalstate.BATCH_CREATION_LIBSVM*(i+1),:]
+        nonzeros = frozenset(x.nonzero()[1])
+#        print >> sys.stderr, nonzeros
+#        print >> sys.stderr, len(nonzeros)
+
+        indices = list(nonzeros)
+        # TODO: Don't duplicate this code, which also appears about one hundred lines down.
+        x = x[:,indices]
+        params = [model.Wvalue[indices], model.W_primevalue[:,indices], model.bvalue, model.b_primevalue[indices]]
+
+        rep = func(x, *params)[0]
         for l in range(rep.shape[0]):
             textr += '%s '%labels[globalstate.BATCH_CREATION_LIBSVM*i+l]
             idx = rep[l,:].nonzero()[0]
@@ -310,7 +336,7 @@ def NLPSDAE(state,channel):
                 params = [model.Wvalue[indices], model.W_primevalue[:,indices], model.bvalue, model.b_primevalue[indices]]
 #                print [p.shape for p in params]
                 # TODO: Remove parameter indices
-                r = TRAINFUNC(x, indices, *params)
+                r = TRAINFUNC(x, *params)
                 assert len(r) == 5
                 reconstruction_error_over_batch = r[0]
                 train_reconstruction_error_mvgavg.add(reconstruction_error_over_batch)
