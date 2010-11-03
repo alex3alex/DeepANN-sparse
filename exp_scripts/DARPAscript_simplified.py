@@ -41,8 +41,9 @@ def rebuildunsup(model,LR,NOISE_LVL,ACTIVATION_REGULARIZATION_COEFF, WEIGHT_REGU
     # TODO: Manual updates
     # TODO: Remove params above that are not necessary: batchsize, train
     x = T.dmatrix()
+    indices = T.lvector()
     (cost,update) = model.get_cost_updates(x, corruption_level = NOISE_LVL, learning_rate = LR, l1reg = ACTIVATION_REGULARIZATION_COEFF, l2reg = WEIGHT_REGULARIZATION_COEFF)
-    TRAINFUNC = theano.function([x], cost, updates = update)
+    TRAINFUNC = theano.function([x, indices], cost, updates = update)
 
 def createlibsvmfile(model,datafiles,dataout):
     print >> sys.stderr, 'Creating libsvm file %s (model=%s, datafiles=%s)...' % (repr(dataout), repr(model),datafiles)
@@ -284,12 +285,16 @@ def NLPSDAE(state,channel):
             if train.value.max() > 1. and INPUTTYPE!='tfidf':
                 print >> sys.stderr, "WARNING: Some inputs are > 1, without tfidf inputtype, it should be in the range [0,1]" 
             for j in range(currentn/BATCHSIZE):
-                print "REMOVEME running TRAINFUNC"
+#                print "REMOVEME running TRAINFUNC"
+                assert BATCHSIZE == 1       # This index sampling training technique might not make sense with BATCHSIZE > 1
                 x = train.container.value[j*BATCHSIZE:(j+1)*BATCHSIZE]
-                print x
-                print x.nonzero()
-                print dir(x)
-                reconstruction_error_over_batch = TRAINFUNC(x)
+#                print x
+#                print x.nonzero()
+#                print x.shape
+#                print dir(x)
+                indices = x.nonzero()[1]
+                print indices
+                reconstruction_error_over_batch = TRAINFUNC(x, indices)
                 train_reconstruction_error_mvgavg.add(reconstruction_error_over_batch)
             print >> sys.stderr, "\t\tAt epoch %d, finished training over file %s, online reconstruction error %s" % (epoch, percent(filenb, NB_FILES),train_reconstruction_error_mvgavg)
             print >> sys.stderr, "\t\t", stats()
