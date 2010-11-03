@@ -15,6 +15,7 @@ from jobman.parse import filemerge
 from common.stats import stats
 from common.str import percent
 from common.movingaverage import MovingAverage
+from common.file import myopen
 
 # TRAINFUNC is a handle to the model's training function. It is a global
 # because it is connected to internal state in the Model. Each time the
@@ -91,10 +92,10 @@ def createlibsvmfile(model,depth,datafiles,dataout):
     print >> sys.stderr, stats()
     outputs = [model.layers[depth].out]
     func = theano.function([model.inp],outputs)
-    f = open(datafiles[0],'r')
+    f = myopen(datafiles[0],'r')
     instances = numpy.asarray(cPickle.load(f),dtype=theano.config.floatX)
     f.close()
-    f = open(datafiles[1],'r')
+    f = myopen(datafiles[1],'r')
     labels = numpy.asarray(cPickle.load(f),dtype = 'int64')
     f.close()
     f = open(dataout,'w')
@@ -226,7 +227,7 @@ def svm_validation(err, reconstruction_error, epoch, model, depth, ACT,LR,NOISE_
 
 
     if epoch != 0:
-        f = open(PATH_DATA + NAME_DATATEST +'_1.pkl','r')
+        f = myopen(PATH_DATA + NAME_DATATEST +'_1.pkl.gz','r')
         train.container.value[:] = numpy.asarray(cPickle.load(f),dtype=theano.config.floatX)
         f.close()
 
@@ -301,9 +302,9 @@ def NLPSDAE(state,channel):
     RULE = state.rule if hasattr(state,'rule') else None
     RandomStreams(state.seed)
     numpy.random.seed(state.seed)
-    datatrain = (PATH_DATA+NAME_DATA+'_1.pkl',PATH_DATA+NAME_LABEL+'_1.pkl')
+    datatrain = (PATH_DATA+NAME_DATA+'_1.pkl.gz',PATH_DATA+NAME_LABEL+'_1.pkl.gz')
     datatrainsave = PATH_SAVE+'/train.libsvm'
-    datatest = (PATH_DATA+NAME_DATATEST+'_1.pkl',PATH_DATA+NAME_LABELTEST+'_1.pkl')
+    datatest = (PATH_DATA+NAME_DATATEST+'_1.pkl.gz',PATH_DATA+NAME_LABELTEST+'_1.pkl.gz')
     datatestsave = PATH_SAVE+'/test.libsvm'
 
     depthbegin = 0
@@ -335,9 +336,9 @@ def NLPSDAE(state,channel):
         #assert ACT.index('rectifier')== DEPTH -1
         # Methods to stack rectifier are still in evaluation (5 different techniques)
         # The best will be implemented in the script soon :).
-    filename = PATH_DATA + NAME_DATATEST + '_1.pkl'
+    filename = PATH_DATA + NAME_DATATEST + '_1.pkl.gz'
     print filename
-    f =open(filename,'r')
+    f =myopen(filename,'r')
     train = theano.shared(numpy.asarray(cPickle.load(f),dtype=theano.config.floatX))
     f.close()
     normalshape = train.value.shape
@@ -436,7 +437,7 @@ def NLPSDAE(state,channel):
                 print >> sys.stderr, "\t\tAbout to read file %s..." % percent(filenb, NB_FILES)
                 print >> sys.stderr, "\t\t", stats()
 #                initial_file_time = time.time()
-                f =open(PATH_DATA + NAME_DATA +'_%s.pkl'%filenb,'r')
+                f =myopen(PATH_DATA + NAME_DATA +'_%s.pkl.gz'%filenb,'r')
                 object = numpy.asarray(cPickle.load(f),dtype=theano.config.floatX)
                 print >> sys.stderr, "\t\t...read file %s" % percent(filenb, NB_FILES)
                 print >> sys.stderr, "\t\t", stats()

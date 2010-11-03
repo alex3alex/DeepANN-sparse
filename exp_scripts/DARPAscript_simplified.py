@@ -15,6 +15,7 @@ from jobman.parse import filemerge
 from common.stats import stats
 from common.str import percent
 from common.movingaverage import MovingAverage
+from common.file import myopen
 
 # TRAINFUNC is a handle to the model's training function. It is a global
 # because it is connected to internal state in the Model. Each time the
@@ -32,24 +33,29 @@ def rebuildunsup(model,LR,NOISE_LVL,ACTIVATION_REGULARIZATION_COEFF, WEIGHT_REGU
     """
 
     global TRAINFUNC
-    givens = {}
-    index = T.lscalar()
-    givens.update({model.x : train[index*batchsize:(index+1)*batchsize]})
-    (cost,update) = model.get_cost_updates(corruption_level = NOISE_LVL, learning_rate = LR, l1reg = ACTIVATION_REGULARIZATION_COEFF, l2reg = WEIGHT_REGULARIZATION_COEFF)
-    TRAINFUNC = theano.function([index],cost, updates = update, givens = givens)
+#    givens = {}
+#    index = T.lscalar()
+#    givens.update({model.x : train[index*batchsize:(index+1)*batchsize]})
+    # TODO: Remove model.x
+    # TODO: Add indices as input param
+    # TODO: Manual updates
+    # TODO: Remove params above that are not necessary: batchsize, train
+    x = T.dmatrix()
+    (cost,update) = model.get_cost_updates(x, corruption_level = NOISE_LVL, learning_rate = LR, l1reg = ACTIVATION_REGULARIZATION_COEFF, l2reg = WEIGHT_REGULARIZATION_COEFF)
+    TRAINFUNC = theano.function([x], cost, updates = update)
 
 def createlibsvmfile(model,datafiles,dataout):
     print >> sys.stderr, 'Creating libsvm file %s (model=%s, datafiles=%s)...' % (repr(dataout), repr(model),datafiles)
     print >> sys.stderr, stats()
     outputs = [model.get_hidden_values(model.x)]
     func = theano.function([model.x],outputs)
-    f = open(datafiles[0],'r')
+    f = myopen(datafiles[0],'r')
     instances = numpy.asarray(cPickle.load(f),dtype=theano.config.floatX)
     f.close()
-    f = open(datafiles[1],'r')
+    f = myopen(datafiles[1],'r')
     labels = numpy.asarray(cPickle.load(f),dtype = 'int64')
     f.close()
-    f = open(dataout,'w')
+    f = myopen(dataout,'w')
     for i in range(globalstate.NB_MAX_TRAINING_EXAMPLES_SVM/globalstate.BATCH_CREATION_LIBSVM):
         textr = ''
         rep = func(instances[globalstate.BATCH_CREATION_LIBSVM*i:globalstate.BATCH_CREATION_LIBSVM*(i+1),:])[0]
@@ -74,7 +80,7 @@ def svm_validation_for_one_trainsize_and_one_C(C, nbinputs,numruns,datatrainsave
     print >> sys.stderr, "\t\tTraining SVM with C=%f, nbinputs=%d, numruns=%d" % (C, nbinputs,numruns)
 
     os.system('%s -s 4 -c %s -l %s -r %s -q %s %s %s > /dev/null 2> /dev/null'%(globalstate.SVMRUNALL_PATH,C,nbinputs,numruns,datatrainsave,datatestsave,PATH_SAVE+'/currentsvm.txt'))
-    results = open(PATH_SAVE+'/currentsvm.txt','r').readline()[:-1].split(' ')
+    results = myopen(PATH_SAVE+'/currentsvm.txt','r').readline()[:-1].split(' ')
     os.remove(PATH_SAVE+'/currentsvm.txt')
     trainerr       = float(results[1])
     trainerrdev    = float(results[2])
@@ -167,7 +173,7 @@ def svm_validation(err, epoch, model, train,datatrain,datatrainsave,datatest,dat
     print >> sys.stderr, stats()
 
     if epoch != 0:
-        f = open('err.pkl','w')
+        f = myopen('err.pkl','w')
         for trainsize in VALIDATION_TRAININGSIZE:
             cPickle.dump(err[trainsize],f,-1)
         f.close()
@@ -216,9 +222,9 @@ def NLPSDAE(state,channel):
     RULE = state.rule if hasattr(state,'rule') else None
     RandomStreams(state.seed)
     numpy.random.seed(state.seed)
-    datatrain = (PATH_DATA+NAME_DATA+'_1.pkl',PATH_DATA+NAME_LABEL+'_1.pkl')
+    datatrain = (PATH_DATA+NAME_DATA+'_1.pkl.gz',PATH_DATA+NAME_LABEL+'_1.pkl.gz')
     datatrainsave = PATH_SAVE+'/train.libsvm'
-    datatest = (PATH_DATA+NAME_DATATEST+'_1.pkl',PATH_DATA+NAME_LABELTEST+'_1.pkl')
+    datatest = (PATH_DATA+NAME_DATATEST+'_1.pkl.gz',PATH_DATA+NAME_LABELTEST+'_1.pkl.gz')
     datatestsave = PATH_SAVE+'/test.libsvm'
 
     depthbegin = 0
@@ -227,9 +233,9 @@ def NLPSDAE(state,channel):
     state.besterr = dict([(`trainsize`, []) for trainsize in VALIDATION_TRAININGSIZE])
     state.besterrepoch = dict([(`trainsize`, []) for trainsize in VALIDATION_TRAININGSIZE])
 
-    filename = PATH_DATA + NAME_DATATEST + '_1.pkl'
+    filename = PATH_DATA + NAME_DATATEST + '_1.pkl.gz'
     print filename
-    f =open(filename,'r')
+    f =myopen(filename,'r')
     train = theano.shared(numpy.asarray(cPickle.load(f),dtype=theano.config.floatX))
     f.close()
     normalshape = train.value.shape
@@ -255,7 +261,7 @@ def NLPSDAE(state,channel):
             print >> sys.stderr, "\t\tAbout to read file %s..." % percent(filenb, NB_FILES)
             print >> sys.stderr, "\t\t", stats()
 #                initial_file_time = time.time()
-            f =open(PATH_DATA + NAME_DATA +'_%s.pkl'%filenb,'r')
+            f =myopen(PATH_DATA + NAME_DATA +'_%s.pkl.gz'%filenb,'r')
             object = numpy.asarray(cPickle.load(f),dtype=theano.config.floatX)
             print >> sys.stderr, "\t\t...read file %s" % percent(filenb, NB_FILES)
             print >> sys.stderr, "\t\t", stats()
@@ -278,7 +284,12 @@ def NLPSDAE(state,channel):
             if train.value.max() > 1. and INPUTTYPE!='tfidf':
                 print >> sys.stderr, "WARNING: Some inputs are > 1, without tfidf inputtype, it should be in the range [0,1]" 
             for j in range(currentn/BATCHSIZE):
-                reconstruction_error_over_batch = TRAINFUNC(j)
+                print "REMOVEME running TRAINFUNC"
+                x = train.container.value[j*BATCHSIZE:(j+1)*BATCHSIZE]
+                print x
+                print x.nonzero()
+                print dir(x)
+                reconstruction_error_over_batch = TRAINFUNC(x)
                 train_reconstruction_error_mvgavg.add(reconstruction_error_over_batch)
             print >> sys.stderr, "\t\tAt epoch %d, finished training over file %s, online reconstruction error %s" % (epoch, percent(filenb, NB_FILES),train_reconstruction_error_mvgavg)
             print >> sys.stderr, "\t\t", stats()

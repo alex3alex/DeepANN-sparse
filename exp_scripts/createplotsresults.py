@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """ This script plot and save the different curve of interest for the DARPAscript results.
 it must be launched in the folder containing the current.conf file and will create the corresponding
 plots: SVM error with respect to number of epochs for all the different number of training exemples

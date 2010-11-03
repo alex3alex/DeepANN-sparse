@@ -37,7 +37,7 @@ import theano.tensor as T
 from theano.sandbox.rng_mrg  import MRG_RandomStreams as RandomStreams
 
 
-import PIL.Image
+#import PIL.Image
 
 
 class dA(object):
@@ -213,9 +213,10 @@ class dA(object):
         """ Computes the reconstructed input given the values of the hidden layer """
         return T.nnet.sigmoid(T.dot(hidden, self.W_prime) + self.b_prime)
     
-    def get_cost_updates(self, corruption_level, learning_rate, l2reg=0., l1reg=0.):
+    def get_cost_updates(self, x, corruption_level, learning_rate, l2reg=0., l1reg=0.):
         """ This function computes the cost and the updates for one trainng
         step of the dA """
+        self.x = x
         if corruption_level == None:
             tilde_x = self.x
         else:
