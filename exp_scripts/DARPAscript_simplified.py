@@ -291,20 +291,31 @@ def NLPSDAE(state,channel):
 #                print "REMOVEME running TRAINFUNC"
                 assert BATCHSIZE == 1       # This index sampling training technique might not make sense with BATCHSIZE > 1
                 x = train.container.value[j*BATCHSIZE:(j+1)*BATCHSIZE]
-#                print x
-#                print x.nonzero()
+                nonzeros = x.nonzero()[1]
+
+                # It is conceivable that some of these zeros overlap with each other or other nonzeros
+                # TODO: Make this value a hyperparameters
+                ZEROS = 20
+                # TODO: Seed RNG with hyperparam seed
+                import random
+                zeros = [random.randint(0, x.shape[0]-1) for i in range(ZEROS)]
+                indices = list(frozenset(nonzeros) | frozenset(zeros))
+
+#                print len(indices), indices
 #                print x.shape
-#                print dir(x)
-                indices = x.nonzero()[1]
-                print len(indices), indices
-#                print dir(model.Wvalue)
-#                print model.Wvalue
-                params = [model.Wvalue, model.W_primevalue, model.bvalue, model.b_primevalue]
+                x = x[:,indices]
+#                print x.shape
+#                params = [model.Wvalue, model.W_primevalue, model.bvalue, model.b_primevalue]
+#                print [p.shape for p in params]
+                params = [model.Wvalue[indices], model.W_primevalue[:,indices], model.bvalue, model.b_primevalue[indices]]
+#                print [p.shape for p in params]
+                # TODO: Remove parameter indices
                 r = TRAINFUNC(x, indices, *params)
                 assert len(r) == 5
                 reconstruction_error_over_batch = r[0]
                 train_reconstruction_error_mvgavg.add(reconstruction_error_over_batch)
-                print reconstruction_error_over_batch
+#                print reconstruction_error_over_batch
+
                 for param, gparam in zip(params, r[1:]):
                     param += gparam
             print >> sys.stderr, "\t\tAt epoch %d, finished training over file %s, online reconstruction error %s" % (epoch, percent(filenb, NB_FILES),train_reconstruction_error_mvgavg)
