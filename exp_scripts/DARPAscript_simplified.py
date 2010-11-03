@@ -39,11 +39,14 @@ def rebuildunsup(model,LR,NOISE_LVL,ACTIVATION_REGULARIZATION_COEFF, WEIGHT_REGU
     # TODO: Remove model.x
     # TODO: Add indices as input param
     # TODO: Manual updates
-    # TODO: Remove params above that are not necessary: batchsize, train
+    # TODO: Remove params above that are not necessary: batchsize, train, LR
     x = T.dmatrix()
+    params = [T.dmatrix(), T.dmatrix(), T.dvector(), T.dvector()]
     indices = T.lvector()
-    (cost,update) = model.get_cost_updates(x, corruption_level = NOISE_LVL, learning_rate = LR, l1reg = ACTIVATION_REGULARIZATION_COEFF, l2reg = WEIGHT_REGULARIZATION_COEFF)
-    TRAINFUNC = theano.function([x, indices], cost, updates = update)
+    # TODO: Remove learning_rate below
+    (cost,update) = model.get_cost_updates(x, params[0], params[1], params[2], params[3], corruption_level = NOISE_LVL, learning_rate = LR, l1reg = ACTIVATION_REGULARIZATION_COEFF, l2reg = WEIGHT_REGULARIZATION_COEFF)
+    TRAINFUNC = theano.function([x, indices] + params, [cost] + update)
+    # TODO: Now do the update
 
 def createlibsvmfile(model,datafiles,dataout):
     print >> sys.stderr, 'Creating libsvm file %s (model=%s, datafiles=%s)...' % (repr(dataout), repr(model),datafiles)
@@ -293,9 +296,17 @@ def NLPSDAE(state,channel):
 #                print x.shape
 #                print dir(x)
                 indices = x.nonzero()[1]
-                print indices
-                reconstruction_error_over_batch = TRAINFUNC(x, indices)
+                print len(indices), indices
+#                print dir(model.Wvalue)
+#                print model.Wvalue
+                params = [model.Wvalue, model.W_primevalue, model.bvalue, model.b_primevalue]
+                r = TRAINFUNC(x, indices, *params)
+                assert len(r) == 5
+                reconstruction_error_over_batch = r[0]
                 train_reconstruction_error_mvgavg.add(reconstruction_error_over_batch)
+                print reconstruction_error_over_batch
+                for param, gparam in zip(params, r[1:]):
+                    param += gparam
             print >> sys.stderr, "\t\tAt epoch %d, finished training over file %s, online reconstruction error %s" % (epoch, percent(filenb, NB_FILES),train_reconstruction_error_mvgavg)
             print >> sys.stderr, "\t\t", stats()
             train_reconstruction_error_mvgavg = MovingAverage()

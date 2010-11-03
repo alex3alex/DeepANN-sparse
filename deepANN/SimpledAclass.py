@@ -162,6 +162,12 @@ class dA(object):
         self.b_prime = bvis
         # un - tied weights
         self.W_prime = W_prime 
+
+        self.Wvalue = W.container.value
+        self.bvalue = bhid.container.value
+        self.b_primevalue = bvis.container.value
+        self.W_primevalue = W_prime.container.value
+
         self.theano_rng = theano_rng
         # if no input is given, generate a variable representing the input
         if input == None : 
@@ -213,10 +219,15 @@ class dA(object):
         """ Computes the reconstructed input given the values of the hidden layer """
         return T.nnet.sigmoid(T.dot(hidden, self.W_prime) + self.b_prime)
     
-    def get_cost_updates(self, x, corruption_level, learning_rate, l2reg=0., l1reg=0.):
+    def get_cost_updates(self, x, W, W_prime, b, b_prime, corruption_level, learning_rate, l2reg=0., l1reg=0.):
         """ This function computes the cost and the updates for one trainng
         step of the dA """
         self.x = x
+        self.W = W
+        self.W_prime = W_prime
+        self.b = b
+        self.b_prime = b_prime
+        self.params = [self.W, self.W_prime, self.b, self.b_prime]
         if corruption_level == None:
             tilde_x = self.x
         else:
@@ -236,11 +247,12 @@ class dA(object):
         # compute the gradients of the cost of the `dA` with respect
         # to its parameters 
         gparams = T.grad(cost, self.params)
-        # generate the list of updates
-        updates = {}
-        for param, gparam in zip(self.params, gparams):
-            updates[param] = param -  learning_rate*gparam
-    
+#        # generate the list of updates
+#        updates = {}
+#        for param, gparam in zip(self.params, gparams):
+#            updates[param] = param -  learning_rate*gparam
+        updates = [-learning_rate*gparam for gparam in gparams]
+
         return (cost, updates)
 
 
