@@ -392,8 +392,8 @@ def NLPSDAE_help(state,channel):
             for j in range(currentn/BATCHSIZE):
                 training_step(BATCHSIZE, j, train, TRAINFUNC, model, train_reconstruction_error_mvgavg)
 
-                # REMOVEME
-                if j > 100: sys.exit(0)
+#                # REMOVEME
+#                if j > 100: sys.exit(0)
 
             print >> sys.stderr, "\t\tAt epoch %d, finished training over file %s, online reconstruction error %s" % (epoch, percent(filenb, NB_FILES),train_reconstruction_error_mvgavg)
             print >> sys.stderr, "\t\t", stats()
