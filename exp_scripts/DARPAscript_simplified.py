@@ -210,8 +210,47 @@ def svm_validation(err, epoch, model, train,datatrain,datatrainsave,datatest,dat
     print >> sys.stderr, "...done validating (err=%s,epoch=%s,model=%s,train=%s,datatrain=%s,datatrainsave=%s,datatest=%s,datatestsave=%s,VALIDATION_TRAININGSIZE=%s,VALIDATION_RUNS_FOR_EACH_TRAININGSIZE=%s,PATH_SAVE=%s)" % (err, epoch, model,train,datatrain,datatrainsave,datatest,datatestsave, VALIDATION_TRAININGSIZE, VALIDATION_RUNS_FOR_EACH_TRAININGSIZE, PATH_SAVE)
     print >> sys.stderr, stats()
 
+def runtrainfunc(TRAINFUNC, x, params):
+    r = TRAINFUNC(x, *params)
+    assert len(r) == 5
+    reconstruction_error_over_batch = r[0]
+    gparams = r[1:]
+    return reconstruction_error_over_batch, gparams
 
-def NLPSDAE(state,channel):
+def training_step(BATCHSIZE, j, train, TRAINFUNC, model, train_reconstruction_error_mvgavg):
+#    print "REMOVEME running TRAINFUNC"
+    assert BATCHSIZE == 1       # This index sampling training technique might not make sense with BATCHSIZE > 1
+    x = train.container.value[j*BATCHSIZE:(j+1)*BATCHSIZE]
+    nonzeros = x.nonzero()[1]
+
+    # It is conceivable that some of these zeros overlap with each other or other nonzeros
+    # TODO: Make this value a hyperparameters
+    ZEROS = 20
+    # TODO: Seed RNG with hyperparam seed
+    import random
+    zeros = [random.randint(0, x.shape[0]-1) for i in range(ZEROS)]
+    indices = list(frozenset(nonzeros) | frozenset(zeros))
+
+#    print len(indices), indices
+#    print x.shape
+    x = x[:,indices]
+#    print x.shape
+#    params = [model.Wvalue, model.W_primevalue, model.bvalue, model.b_primevalue]
+#    print [p.shape for p in params]
+    params = [model.Wvalue[indices], model.W_primevalue[:,indices], model.bvalue, model.b_primevalue[indices]]
+#    print [p.shape for p in params]
+    # TODO: Remove parameter indices
+
+    reconstruction_error_over_batch, gparams = runtrainfunc(TRAINFUNC, x, params)
+
+    train_reconstruction_error_mvgavg.add(reconstruction_error_over_batch)
+#    print reconstruction_error_over_batch
+
+    for param, gparam in zip(params, gparams):
+        param += gparam
+
+
+def NLPSDAE_help(state,channel):
     """ In this simplified version we only train the first layer, the hyperparameters could not be lists"""
 
     global globalstate
@@ -314,39 +353,13 @@ def NLPSDAE(state,channel):
             if train.value.max() > 1. and INPUTTYPE!='tfidf':
                 print >> sys.stderr, "WARNING: Some inputs are > 1, without tfidf inputtype, it should be in the range [0,1]" 
             for j in range(currentn/BATCHSIZE):
-#                print "REMOVEME running TRAINFUNC"
-                assert BATCHSIZE == 1       # This index sampling training technique might not make sense with BATCHSIZE > 1
-                x = train.container.value[j*BATCHSIZE:(j+1)*BATCHSIZE]
-                nonzeros = x.nonzero()[1]
+                training_step(BATCHSIZE, j, train, TRAINFUNC, model, train_reconstruction_error_mvgavg)
 
-                # It is conceivable that some of these zeros overlap with each other or other nonzeros
-                # TODO: Make this value a hyperparameters
-                ZEROS = 20
-                # TODO: Seed RNG with hyperparam seed
-                import random
-                zeros = [random.randint(0, x.shape[0]-1) for i in range(ZEROS)]
-                indices = list(frozenset(nonzeros) | frozenset(zeros))
+                # REMOVEME
+                if j > 1000: sys.exit(0)
 
-#                print len(indices), indices
-#                print x.shape
-                x = x[:,indices]
-#                print x.shape
-#                params = [model.Wvalue, model.W_primevalue, model.bvalue, model.b_primevalue]
-#                print [p.shape for p in params]
-                params = [model.Wvalue[indices], model.W_primevalue[:,indices], model.bvalue, model.b_primevalue[indices]]
-#                print [p.shape for p in params]
-                # TODO: Remove parameter indices
-                r = TRAINFUNC(x, *params)
-                assert len(r) == 5
-                reconstruction_error_over_batch = r[0]
-                train_reconstruction_error_mvgavg.add(reconstruction_error_over_batch)
-#                print reconstruction_error_over_batch
-
-                for param, gparam in zip(params, r[1:]):
-                    param += gparam
             print >> sys.stderr, "\t\tAt epoch %d, finished training over file %s, online reconstruction error %s" % (epoch, percent(filenb, NB_FILES),train_reconstruction_error_mvgavg)
             print >> sys.stderr, "\t\t", stats()
-            train_reconstruction_error_mvgavg = MovingAverage()
         print >> sys.stderr, '...finished training epoch #%s' % percent(epoch,NEPOCHS)
         print >> sys.stderr, stats()
 #           sys.stderr.flush()
@@ -374,3 +387,10 @@ def NLPSDAE(state,channel):
         print >> sys.stderr, stats()
     return channel.COMPLETE
 
+
+def NLPSDAE(state,channel):
+#    import cProfile
+#    import DARPAscript_simplified
+#    cProfile.run('DARPAscript_simplified.NLPSDAE_help(state,channel)', 'DARPAscript_simplified.stats')
+#    cProfile.run('NLPSDAE_help(state,channel)', 'DARPAscript_simplified.stats')
+    NLPSDAE_help(state,channel)
