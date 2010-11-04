@@ -210,17 +210,16 @@ def svm_validation(err, epoch, model, train,datatrain,datatrainsave,datatest,dat
     print >> sys.stderr, "...done validating (err=%s,epoch=%s,model=%s,train=%s,datatrain=%s,datatrainsave=%s,datatest=%s,datatestsave=%s,VALIDATION_TRAININGSIZE=%s,VALIDATION_RUNS_FOR_EACH_TRAININGSIZE=%s,PATH_SAVE=%s)" % (err, epoch, model,train,datatrain,datatrainsave,datatest,datatestsave, VALIDATION_TRAININGSIZE, VALIDATION_RUNS_FOR_EACH_TRAININGSIZE, PATH_SAVE)
     print >> sys.stderr, stats()
 
-def runtrainfunc(TRAINFUNC, x, params):
-    r = TRAINFUNC(x, *params)
+#def runtrainfunc(TRAINFUNC, x, params):
+def runtrainfunc(TRAINFUNC, x, model, indices):
+#    r = TRAINFUNC(x, *params)
+    r = TRAINFUNC(x[:,indices], model.Wvalue[indices], model.W_primevalue[:,indices], model.bvalue, model.b_primevalue[indices])
     assert len(r) == 5
     reconstruction_error_over_batch = r[0]
     gparams = r[1:]
     return reconstruction_error_over_batch, gparams
 
-def training_step(BATCHSIZE, j, train, TRAINFUNC, model, train_reconstruction_error_mvgavg):
-#    print "REMOVEME running TRAINFUNC"
-    assert BATCHSIZE == 1       # This index sampling training technique might not make sense with BATCHSIZE > 1
-    x = train.container.value[j*BATCHSIZE:(j+1)*BATCHSIZE]
+def get_indices(x):
     nonzeros = x.nonzero()[1]
 
     # It is conceivable that some of these zeros overlap with each other or other nonzeros
@@ -230,24 +229,60 @@ def training_step(BATCHSIZE, j, train, TRAINFUNC, model, train_reconstruction_er
     import random
     zeros = [random.randint(0, x.shape[0]-1) for i in range(ZEROS)]
     indices = list(frozenset(nonzeros) | frozenset(zeros))
+    indices.sort()
+    return indices
 
-#    print len(indices), indices
-#    print x.shape
-    x = x[:,indices]
-#    print x.shape
-#    params = [model.Wvalue, model.W_primevalue, model.bvalue, model.b_primevalue]
-#    print [p.shape for p in params]
-    params = [model.Wvalue[indices], model.W_primevalue[:,indices], model.bvalue, model.b_primevalue[indices]]
-#    print [p.shape for p in params]
-    # TODO: Remove parameter indices
+#def slice_x_and_params(x, model, indices):
+##    print len(indices), indices
+##    print x.shape
+#    x = x[:,indices]
+##    print x.shape
+##    params = [model.Wvalue, model.W_primevalue, model.bvalue, model.b_primevalue]
+##    print [p.shape for p in params]
+#    params = [model.Wvalue[indices], model.W_primevalue[:,indices], model.bvalue, model.b_primevalue[indices]]
+##    print [p.shape for p in params]
+#    return params, x
 
-    reconstruction_error_over_batch, gparams = runtrainfunc(TRAINFUNC, x, params)
+#def apply_updates(params, gparams):
+#    for param, gparam in zip(params, gparams):
+#        param += gparam
 
+#def apply_updates(model, indices, gparams):
+#    model.Wvalue[indices]           += gparams[0]
+#    model.W_primevalue[:,indices]   += gparams[1]
+#    model.bvalue                    += gparams[2]
+#    model.b_primevalue[indices]     += gparams[3]
+def apply_updates(model, indices, gparams):
+#    print [model.Wvalue[indices].shape, model.W_primevalue[:,indices].shape, model.bvalue.shape, model.b_primevalue[indices].shape]
+#    print [n.shape for n in gparams]
+    apply_updates1(model, indices, gparams)
+    apply_updates2(model, indices, gparams)
+    apply_updates3(model, indices, gparams)
+    apply_updates4(model, indices, gparams)
+def apply_updates1(model, indices, gparams):
+    model.Wvalue[indices]           += gparams[0]
+def apply_updates2(model, indices, gparams):
+#    print gparams[1]
+#    print model.W_primevalue[:,indices]
+    model.W_primevalue[:,indices]   += gparams[1]
+#    print model.W_primevalue[:,indices]
+def apply_updates3(model, indices, gparams):
+    model.bvalue                    += gparams[2]
+def apply_updates4(model, indices, gparams):
+    model.b_primevalue[indices]     += gparams[3]
+
+def training_step(BATCHSIZE, j, train, TRAINFUNC, model, train_reconstruction_error_mvgavg):
+#    print "REMOVEME running TRAINFUNC"
+    assert BATCHSIZE == 1       # This index sampling training technique might not make sense with BATCHSIZE > 1
+
+    x = train.container.value[j*BATCHSIZE:(j+1)*BATCHSIZE]
+    indices = get_indices(x)
+#    params, x = slice_x_and_params(x, model, indices)
+
+    reconstruction_error_over_batch, gparams = runtrainfunc(TRAINFUNC, x, model, indices)
     train_reconstruction_error_mvgavg.add(reconstruction_error_over_batch)
 #    print reconstruction_error_over_batch
-
-    for param, gparam in zip(params, gparams):
-        param += gparam
+    apply_updates(model, indices, gparams)
 
 
 def NLPSDAE_help(state,channel):
@@ -356,7 +391,7 @@ def NLPSDAE_help(state,channel):
                 training_step(BATCHSIZE, j, train, TRAINFUNC, model, train_reconstruction_error_mvgavg)
 
                 # REMOVEME
-                if j > 1000: sys.exit(0)
+                if j > 100: sys.exit(0)
 
             print >> sys.stderr, "\t\tAt epoch %d, finished training over file %s, online reconstruction error %s" % (epoch, percent(filenb, NB_FILES),train_reconstruction_error_mvgavg)
             print >> sys.stderr, "\t\t", stats()
