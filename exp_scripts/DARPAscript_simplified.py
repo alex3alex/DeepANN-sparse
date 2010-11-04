@@ -84,11 +84,13 @@ def createlibsvmfile(model,datafiles,dataout):
 #        print >> sys.stderr, len(nonzeros)
 
         indices = list(nonzeros)
-        # TODO: Don't duplicate this code, which also appears about one hundred lines down.
-        x = x[:,indices]
-        params = [model.Wvalue[indices], model.W_primevalue[:,indices], model.bvalue, model.b_primevalue[indices]]
+#        # TODO: Don't duplicate this code, which also appears about one hundred lines down.
+#        x = x[:,indices]
+#        params = [model.Wvalue[indices], model.W_primevalue[:,indices], model.bvalue, model.b_primevalue[indices]]
+#        rep = func(x, *params)[0]
 
-        rep = func(x, *params)[0]
+        rep = func(x[:,indices], model.Wvalue[indices], model.W_primevalue[:,indices], model.bvalue, model.b_primevalue[indices])[0]
+
         for l in range(rep.shape[0]):
             textr += '%s '%labels[globalstate.BATCH_CREATION_LIBSVM*i+l]
             idx = rep[l,:].nonzero()[0]
