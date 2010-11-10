@@ -214,24 +214,33 @@ def svm_validation(err, epoch, model, train,datatrain,datatrainsave,datatest,dat
 
 #def runtrainfunc(TRAINFUNC, x, params):
 def runtrainfunc(TRAINFUNC, x, model, indices):
+    print len(indices)
 #    r = TRAINFUNC(x, *params)
+    # FIXME
     r = TRAINFUNC(x[:,indices], model.Wvalue[indices], model.W_primevalue[:,indices], model.bvalue, model.b_primevalue[indices])
+#    r = TRAINFUNC(x, model.Wvalue, model.W_primevalue, model.bvalue, model.b_primevalue)
     assert len(r) == 5
     reconstruction_error_over_batch = r[0]
     gparams = r[1:]
     return reconstruction_error_over_batch, gparams
 
 def get_indices(x):
+    assert x.shape[0] == 1      # Assume minibatch
+
     nonzeros = x.nonzero()[1]
 
     # It is conceivable that some of these zeros overlap with each other or other nonzeros
     # TODO: Make this value a hyperparameters
-    ZEROS = 20
+#    ZEROS = 20
+    ZEROS = 100-len(frozenset(nonzeros))
     # TODO: Seed RNG with hyperparam seed
     import random
-    zeros = [random.randint(0, x.shape[0]-1) for i in range(ZEROS)]
+#    print x.shape
+    zeros = [random.randint(0, x.shape[1]-1) for i in range(ZEROS)]
+#    print zeros, nonzeros
     indices = list(frozenset(nonzeros) | frozenset(zeros))
     indices.sort()
+#    print len(indices)
     return indices
 
 #def slice_x_and_params(x, model, indices):
@@ -392,8 +401,8 @@ def NLPSDAE_help(state,channel):
             for j in range(currentn/BATCHSIZE):
                 training_step(BATCHSIZE, j, train, TRAINFUNC, model, train_reconstruction_error_mvgavg)
 
-#                # REMOVEME
-#                if j > 100: sys.exit(0)
+                # REMOVEME
+                if j > 100: sys.exit(0)
 
             print >> sys.stderr, "\t\tAt epoch %d, finished training over file %s, online reconstruction error %s" % (epoch, percent(filenb, NB_FILES),train_reconstruction_error_mvgavg)
             print >> sys.stderr, "\t\t", stats()
